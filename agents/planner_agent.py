@@ -234,6 +234,7 @@ class VoyageAgent:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": cot_prompt}
         ], temperature=0.3)
+        result["cot_budget"] = cot_response
 
         self._add_step("action", "Action 3 : Répartition du budget par catégorie.", "⚡")
         self._add_step("observation", f"Observation 3 :\n{b_summary}", "👁️")

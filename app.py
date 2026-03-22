@@ -208,7 +208,16 @@ else:
                     st.markdown(f'<div class="final-box"> {content}</div>',
                                unsafe_allow_html=True)
 
-            # Auto-correction
+            
+            if result.get("cot_budget"):
+                st.markdown("---")
+                st.markdown("### Raisonnement budget (Chain of Thought)")
+                st.markdown("*Voici comment l'agent a raisonné pour répartir le budget :*")
+                st.markdown(
+                    f'<div class="thought-box">{result["cot_budget"]}</div>',
+                    unsafe_allow_html=True
+                )
+
             if result.get("correction"):
                 st.markdown("---")
                 st.markdown("###  Auto-correction (Self-Correction)")
