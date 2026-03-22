@@ -5,7 +5,7 @@ Application Streamlit utilisant un agent LLM (LLaMA 3 via Groq) pour planifier d
 ## Fonctionnalités
 
 - **Météo en temps réel** via OpenWeatherMap API
-- **Recherche de vols** avec prix via Amadeus API
+- **Recherche de vols et Hotels** avec prix via Serp API
 - **Répartition intelligente du budget** selon le profil de voyage
 - **Itinéraire jour par jour** adapté à la météo
 - **Export PDF** de l'itinéraire complet
@@ -71,7 +71,7 @@ streamlit run app.py
 |---------|-------|------|
 | **Groq** | LLM (LLaMA 3) | [console.groq.com](https://console.groq.com) |
 | OpenWeatherMap | Météo réelle | [openweathermap.org](https://openweathermap.org/api) |
-| Serpapi | Vols réels | [serpapi.com](https://serpapi.com/users/welcome) |
+| Serpapi | Vols et Hotels réels | [serpapi.com](https://serpapi.com/users/welcome) |
 
 
 ## Structure du projet

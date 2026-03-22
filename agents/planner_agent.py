@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from tools.weather_tool import get_weather, weather_summary
 from tools.flights_tool import search_flights, flights_summary
 from tools.budget_tool import calculate_budget, budget_summary
+from tools.hotels_tool import search_hotels, hotels_summary
 from prompts.system_prompt import (
     SYSTEM_PROMPT, REACT_PROMPT, COT_BUDGET_PROMPT,
     SELF_CORRECTION_PROMPT, ITINERARY_PROMPT
@@ -91,6 +92,24 @@ class VoyageAgent:
 
         self._add_step("action", f"Action 2 : Recherche de vols pour {params['travelers']} voyageur(s).", "⚡")
         self._add_step("observation", f"Observation 2 : {f_summary}", "👁️")
+
+
+        # HÔTELS
+        update("Recherche des hôtels disponibles...")
+        self._add_step("thought", f"Thought 2b : Je cherche les hôtels disponibles à {params['destination']}.", "🤔")
+
+        hotels_data = search_hotels(
+            city=params["destination"],
+            check_in=params["depart_date"],
+            check_out=params["return_date"],
+            adults=params["travelers"]
+        )
+        h_summary = hotels_summary(hotels_data)
+        result["hotels"] = hotels_data.get("hotels", [])
+
+        self._add_step("action", f"Action 2b : Recherche hôtels à {params['destination']}.", "⚡")
+        self._add_step("observation", f"Observation 2b : {h_summary}", "👁️")
+
 
         # ÉTAPE 2 : BUDGET (Chain of Thought)
         update("Calcul de la répartition du budget...")

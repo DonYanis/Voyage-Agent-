@@ -157,6 +157,7 @@ else:
         steps_map = {
             "Recherche des données météo...": 20,
             "Recherche des vols disponibles...": 40,
+            "Recherche des hôtels disponibles...": 50,
             "Calcul de la répartition du budget...": 60,
             "Génération de l'itinéraire personnalisé...": 80,
             "Vérification et correction du plan...": 95,
@@ -333,7 +334,30 @@ else:
                         with col3:
                             st.write(f"**Prix/pers.** : {f['price_per_person']:.0f}€")
                             st.write(f"**Total** : {f['total_price']:.0f}€")
-
+            # Hôtels disponibles
+            st.markdown("---")
+            st.markdown("### Hôtels disponibles")
+            hotels = result.get("hotels", [])
+            if hotels:
+                for i, h in enumerate(hotels[:4]):
+                    stars_str = "★" * int(h.get("stars", 0)) if h.get("stars") else ""
+                    rating = h.get("rating", 0)
+                    with st.expander(f"**{h['name']}** {stars_str} — {h['price_per_night']:.0f}€/nuit — Note : {rating}/10"):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.write(f"**Prix/nuit** : {h['price_per_night']:.0f}€")
+                            st.write(f"**Total {h['days']} nuits** : {h['total_price']:.0f}€")
+                        with col2:
+                            st.write(f"**Note** : {rating}/10")
+                            st.write(f"**Avis** : {h.get('reviews', 0)} avis")
+                        with col3:
+                            amenities = h.get("amenities", [])
+                            if amenities:
+                                st.write("**Équipements** : " + ", ".join(amenities[:3]))
+                        if h.get("description"):
+                            st.caption(h["description"])
+                        if h.get("link"):
+                            st.markdown(f"[Voir sur Google Hotels]({h['link']})")
         # TAB 4 : ITINÉRAIRE
         with tab4:
             st.markdown(f"### 📅 Itinéraire {origin} → {destination}")
