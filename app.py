@@ -158,6 +158,7 @@ else:
             "Recherche des données météo...": 20,
             "Recherche des vols disponibles...": 40,
             "Recherche des hôtels disponibles...": 50,
+            "Le LLM analyse et recommande le meilleur vol et hôtel...": 55,
             "Calcul de la répartition du budget...": 60,
             "Génération de l'itinéraire personnalisé...": 80,
             "Vérification et correction du plan...": 95,
@@ -318,6 +319,42 @@ else:
 
             # Vols disponibles
             st.markdown("---")
+            # ── RECOMMANDATION LLM ──
+            recommendation = result.get("recommendation", {})
+            if recommendation:
+                rec_f = recommendation.get("recommended_flight", {})
+                rec_h = recommendation.get("recommended_hotel", {})
+                summary = recommendation.get("global_summary", "")
+
+                st.markdown("### Recommandation de l'agent")
+
+                if summary:
+                    st.info(f" {summary}")
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.markdown("#### Vol recommandé")
+                    if rec_f:
+                        obj = rec_f.get("object", {})
+                        st.success(
+                            f"**{rec_f.get('name', obj.get('airline', '?'))}**\n\n"
+                            f"Prix total : **{rec_f.get('price', obj.get('total_price', '?'))}€**"
+                        )
+                        st.markdown(f"**Pourquoi ?** {rec_f.get('reason', '')}")
+
+                with col2:
+                    st.markdown("#### Hôtel recommandé")
+                    if rec_h:
+                        obj = rec_h.get("object", {})
+                        st.success(
+                            f"**{rec_h.get('name', obj.get('name', '?'))}**\n\n"
+                            f"{rec_h.get('price_per_night', obj.get('price_per_night', '?'))}€/nuit — "
+                            f"Total : **{rec_h.get('total_price', obj.get('total_price', '?'))}€**"
+                        )
+                        st.markdown(f"**Pourquoi ?** {rec_h.get('reason', '')}")
+
+                st.markdown("---")
             st.markdown("###  Vols disponibles")
             flights = result.get("flights", [])
             if flights:

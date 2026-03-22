@@ -10,7 +10,7 @@ from tools.budget_tool import calculate_budget, budget_summary
 from tools.hotels_tool import search_hotels, hotels_summary
 from prompts.system_prompt import (
     SYSTEM_PROMPT, REACT_PROMPT, COT_BUDGET_PROMPT,
-    SELF_CORRECTION_PROMPT, ITINERARY_PROMPT
+    SELF_CORRECTION_PROMPT, ITINERARY_PROMPT, RECOMMENDATION_PROMPT
 )
 
 load_dotenv()
@@ -47,6 +47,73 @@ class VoyageAgent:
             "icon": icon
         })
 
+    def recommend_flight_and_hotel(self, flights: list, hotels: list, budget_data: dict, params: dict) -> dict:
+        """
+        Le LLM analyse les vols et hôtels disponibles et recommande
+        le meilleur choix selon le profil et le budget.
+        """
+        if not flights and not hotels:
+            return {}
+
+        from tools.flights_tool import flights_summary as fs
+        from tools.hotels_tool import hotels_summary as hs
+
+        # Reconstruire les summaries avec index numérotés
+        f_lines = ["Vols disponibles :"]
+        for i, f in enumerate(flights[:5]):
+            stops = "direct" if f["stops"] == 0 else f"{f['stops']} escale(s)"
+            f_lines.append(
+                f"[{i}] {f['airline']} ({f['flight_number']}) — "
+                f"{f['total_price']:.0f}€ total — {stops} — "
+                f"départ {f['departure']}"
+            )
+
+        h_lines = ["Hôtels disponibles :"]
+        for i, h in enumerate(hotels[:5]):
+            stars = "★" * int(h.get("stars", 0)) if h.get("stars") else ""
+            h_lines.append(
+                f"[{i}] {h['name']} {stars} — "
+                f"{h['price_per_night']:.0f}€/nuit — "
+                f"Total : {h['total_price']:.0f}€ — "
+                f"Note : {h['rating']}/10 — "
+                f"Équipements : {', '.join(h.get('amenities', [])[:3])}"
+            )
+
+        # Calcul budget hôtel disponible
+        breakdown = budget_data.get("breakdown", {})
+        hotel_budget_total = breakdown.get("hebergement", {}).get("total", 0)
+        hotel_budget_per_night = breakdown.get("hebergement", {}).get("per_day", 0)
+        flight_budget = budget_data.get("total_budget", 0) * 0.4
+
+        prompt = RECOMMENDATION_PROMPT.format(
+            travel_type=params["travel_type"],
+            budget=params["budget"],
+            travelers=params["travelers"],
+            destination=params["destination"],
+            flights_summary="\n".join(f_lines),
+            hotels_summary="\n".join(h_lines),
+            hotel_budget=round(hotel_budget_total),
+            hotel_budget_per_night=round(hotel_budget_per_night),
+            flight_budget=round(flight_budget)
+        )
+
+        response = self._call_llm([
+            {"role": "system", "content": "Tu es un expert en voyages. Réponds UNIQUEMENT en JSON valide."},
+            {"role": "user", "content": prompt}
+        ], temperature=0.3, max_tokens=800)
+
+        result = self._parse_json(response)
+
+        # Attacher les objets complets recommandés
+        fi = result.get("recommended_flight", {}).get("index", 0)
+        hi = result.get("recommended_hotel", {}).get("index", 0)
+        if flights and fi < len(flights):
+            result["recommended_flight"]["object"] = flights[fi]
+        if hotels and hi < len(hotels):
+            result["recommended_hotel"]["object"] = hotels[hi]
+
+        return result
+    
     def plan(self, params: dict, progress_callback=None) -> dict:
         """
         Pipeline principal de planification.
@@ -110,7 +177,37 @@ class VoyageAgent:
         self._add_step("action", f"Action 2b : Recherche hôtels à {params['destination']}.", "⚡")
         self._add_step("observation", f"Observation 2b : {h_summary}", "👁️")
 
+        # RECOMMANDATION LLM (vol + hôtel)
+        update("Le LLM analyse et recommande le meilleur vol et hôtel...")
+        self._add_step("thought",
+            f"Thought 2c : J'analyse les {len(result['flights'])} vols et "
+            f"{len(result['hotels'])} hôtels pour recommander le meilleur choix "
+            f"selon le profil '{params['travel_type']}'.", "🤔")
 
+        # Budget temporaire pour la recommandation (avant calcul complet)
+        temp_budget = calculate_budget(
+            total_budget=params["budget"],
+            flight_cost=best_flight_cost,
+            days=days,
+            travelers=params["travelers"],
+            travel_type=params["travel_type"]
+        )
+
+        recommendation = self.recommend_flight_and_hotel(
+            flights=result["flights"],
+            hotels=result["hotels"],
+            budget_data=temp_budget,
+            params=params
+        )
+        result["recommendation"] = recommendation
+
+        rec_f = recommendation.get("recommended_flight", {})
+        rec_h = recommendation.get("recommended_hotel", {})
+        self._add_step("action", "Action 2c : LLM recommande le meilleur vol et hôtel.", "⚡")
+        self._add_step("observation",
+            f"Observation 2c : Vol recommandé → {rec_f.get('name', '?')} ({rec_f.get('price', '?')}€) | "
+            f"Hôtel recommandé → {rec_h.get('name', '?')} ({rec_h.get('price_per_night', '?')}€/nuit)", "👁️")
+        
         # ÉTAPE 2 : BUDGET (Chain of Thought)
         update("Calcul de la répartition du budget...")
         self._add_step("thought", "Thought 3 : Je calcule la répartition du budget étape par étape (Chain of Thought).", "🤔")

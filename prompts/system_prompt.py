@@ -124,3 +124,36 @@ Génère un JSON avec cette structure EXACTE :
 
 Adapte IMPÉRATIVEMENT chaque jour à la météo prévue.
 Retourne UNIQUEMENT le JSON, sans texte avant ou après."""
+RECOMMENDATION_PROMPT = """Tu es un expert en voyages. Analyse les options disponibles et recommande le meilleur vol ET le meilleur hôtel selon le profil du voyageur.
+
+Profil : {travel_type}
+Budget total : {budget}€
+Voyageurs : {travelers}
+Destination : {destination}
+
+VOLS DISPONIBLES :
+{flights_summary}
+
+HÔTELS DISPONIBLES :
+{hotels_summary}
+
+Budget hébergement disponible : {hotel_budget}€ total ({hotel_budget_per_night}€/nuit)
+Budget vol disponible : {flight_budget}€
+
+Réponds UNIQUEMENT en JSON avec cette structure exacte :
+{{
+  "recommended_flight": {{
+    "index": 0,
+    "name": "nom de la compagnie et numéro de vol",
+    "price": 000,
+    "reason": "explication en 2-3 phrases pourquoi ce vol est le meilleur choix pour ce profil"
+  }},
+  "recommended_hotel": {{
+    "index": 0,
+    "name": "nom de l'hôtel",
+    "price_per_night": 000,
+    "total_price": 000,
+    "reason": "explication en 2-3 phrases pourquoi cet hôtel est le meilleur choix pour ce profil et sa proximité"
+  }},
+  "global_summary": "résumé en 2 phrases du choix combiné vol + hôtel et pourquoi c'est optimal pour ce profil"
+}}"""
