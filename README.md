@@ -16,7 +16,7 @@ Application Streamlit utilisant un agent LLM (LLaMA 3 via Groq) pour planifier d
 ### 1. ReAct (Reason + Act) — Technique principale
 La boucle ReAct est au cœur de l'agent. Pour chaque décision, l'agent :
 - **Thought** : Réfléchit à ce qu'il doit faire
-- **Action** : Appelle un outil (météo, vols, budget)
+- **Action** : Appelle un outil (météo, vols,hotels, budget)
 - **Observation** : Analyse le résultat
 - Répète jusqu'à la réponse finale
 
