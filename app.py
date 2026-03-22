@@ -180,9 +180,11 @@ else:
         st.success(f"Ton voyage à **{destination}** est planifié ! ({days} jours)")
 
         # ONGLETS DE RÉSULTATS
-        tab1,  tab3, tab4, tab2, tab5 = st.tabs([
-            "🧠 Raisonnement",  "💰 Budget", "📅 Itinéraire","🌤 Météo", "📄 Export PDF"
+        #tab1,  tab3, tab4, tab2, tab5 = st.tabs(["🧠 Raisonnement",  "💰 Budget", "📅 Itinéraire","🌤 Météo", "📄 Export PDF"])
+        tab1,  tab3, tab4,  tab5 = st.tabs([
+            "🧠 Raisonnement",  "💰 Budget", "📅 Itinéraire", "📄 Export PDF"
         ])
+
 
         # TAB 1 : RAISONNEMENT 
         with tab1:
@@ -223,63 +225,63 @@ else:
                 st.markdown("###  Auto-correction (Self-Correction)")
                 st.markdown(f"*L'agent a vérifié son plan :*")
                 st.info(result["correction"])
-
-        # TAB 2 : MÉTÉO
-        with tab2:
-            st.markdown(f"### 🌤 Météo à {destination}")
-
-            weather_days = result.get("weather", [])
-            if weather_days:
-                # Graphique températures
-                dates_w = [d["date"] for d in weather_days]
-                temps_min = [d["temp_min"] for d in weather_days]
-                temps_max = [d["temp_max"] for d in weather_days]
-
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=dates_w, y=temps_max, name="Temp. max",
-                    line=dict(color="#F18F01", width=2),
-                    fill=None
-                ))
-                fig.add_trace(go.Scatter(
-                    x=dates_w, y=temps_min, name="Temp. min",
-                    line=dict(color="#2E86AB", width=2),
-                    fill="tonexty", fillcolor="rgba(46,134,171,0.1)"
-                ))
-                fig.update_layout(
-                    title="Températures prévues",
-                    xaxis_title="Date",
-                    yaxis_title="Température (°C)",
-                    height=300,
-                    margin=dict(l=0, r=0, t=40, b=0)
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-                # Cartes météo par jour
-                cols = st.columns(min(len(weather_days), 4))
-                for i, day in enumerate(weather_days[:8]):
-                    with cols[i % 4]:
-                        rain_emoji = "🌧️" if day.get("rain", 0) > 0 else ""
-                        desc = day["description"].capitalize()
-                        if "soleil" in desc.lower() or "dégagé" in desc.lower() or "clair" in desc.lower():
-                            emoji = "☀️"
-                        elif "pluie" in desc.lower() or "rain" in desc.lower():
-                            emoji = "🌧️"
-                        elif "nuage" in desc.lower() or "cloud" in desc.lower():
-                            emoji = "⛅"
-                        elif "orage" in desc.lower():
-                            emoji = "⛈️"
-                        else:
-                            emoji = "🌤️"
-
-                        st.metric(
-                            label=f"{emoji} {day['date']}",
-                            value=f"{day['temp_max']}°C",
-                            delta=f"min {day['temp_min']}°C"
-                        )
-                        st.caption(f"{desc} | 💧{day['humidity']}%")
-
-        # TAB 3 : BUDGET
+      
+#        # TAB 2 : MÉTÉO
+#        with tab2:
+#            st.markdown(f"### 🌤 Météo à {destination}")
+#
+#            weather_days = result.get("weather", [])
+#            if weather_days:
+#                # Graphique températures
+#                dates_w = [d["date"] for d in weather_days]
+#                temps_min = [d["temp_min"] for d in weather_days]
+#                temps_max = [d["temp_max"] for d in weather_days]
+#
+#                fig = go.Figure()
+#                fig.add_trace(go.Scatter(
+#                    x=dates_w, y=temps_max, name="Temp. max",
+#                    line=dict(color="#F18F01", width=2),
+#                    fill=None
+#                ))
+#                fig.add_trace(go.Scatter(
+#                    x=dates_w, y=temps_min, name="Temp. min",
+#                    line=dict(color="#2E86AB", width=2),
+#                    fill="tonexty", fillcolor="rgba(46,134,171,0.1)"
+#                ))
+#                fig.update_layout(
+#                    title="Températures prévues",
+#                    xaxis_title="Date",
+#                    yaxis_title="Température (°C)",
+#                    height=300,
+#                    margin=dict(l=0, r=0, t=40, b=0)
+#                )
+#                st.plotly_chart(fig, use_container_width=True)
+#
+#                # Cartes météo par jour
+#                cols = st.columns(min(len(weather_days), 4))
+#                for i, day in enumerate(weather_days[:8]):
+#                    with cols[i % 4]:
+#                        rain_emoji = "🌧️" if day.get("rain", 0) > 0 else ""
+#                        desc = day["description"].capitalize()
+#                        if "soleil" in desc.lower() or "dégagé" in desc.lower() or "clair" in desc.lower():
+#                            emoji = "☀️"
+#                        elif "pluie" in desc.lower() or "rain" in desc.lower():
+#                            emoji = "🌧️"
+#                        elif "nuage" in desc.lower() or "cloud" in desc.lower():
+#                            emoji = "⛅"
+#                        elif "orage" in desc.lower():
+#                            emoji = "⛈️"
+#                        else:
+#                            emoji = "🌤️"
+#
+#                        st.metric(
+#                            label=f"{emoji} {day['date']}",
+#                            value=f"{day['temp_max']}°C",
+#                            delta=f"min {day['temp_min']}°C"
+#                        )
+#                        st.caption(f"{desc} | 💧{day['humidity']}%")
+#        
+#        # TAB 3 : BUDGET
         with tab3:
             st.markdown("### 💰 Répartition du budget")
 
@@ -431,7 +433,7 @@ else:
                     weather_note = day_plan.get("weather_note", "")
                     st.markdown(
                         f'<div class="day-card">'
-                        f'<h4>📅 Jour {day_plan.get("day", "?")} — {day_plan.get("date", "")} : '
+                        f'<h4> Jour {day_plan.get("day", "?")} — {day_plan.get("date", "")} : '
                         f'{day_plan.get("title", "")}</h4>'
                         + (f'<p style="color:#666;font-size:0.85rem;">🌤 {weather_note}</p>' if weather_note else "")
                         + "</div>",
