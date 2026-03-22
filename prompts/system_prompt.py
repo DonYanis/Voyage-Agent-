@@ -117,7 +117,7 @@ Génère un JSON avec cette structure EXACTE :
     "Conseil pratique 2"
   ],
   "travel_score": {{
-    "score": 8.5,
+    "score": "une note sur 10",
     "reasons": ["Raison 1", "Raison 2"]
   }}
 }}

@@ -221,6 +221,12 @@ class VoyageAgent:
         )
         b_summary = budget_summary(budget_data)
         result["budget"] = budget_data
+        # Vérification budget insuffisant
+        if not budget_data.get("success"):
+            self._add_step("thought",
+                f"Thought ALERTE : {budget_data.get('error', 'Budget insuffisant')}. "
+                f"Je vais adapter le plan au budget disponible.", "⚠️")
+            result["budget_warning"] = budget_data.get("error", "Budget insuffisant")
 
         # Enrichir avec CoT via LLM
         cot_prompt = COT_BUDGET_PROMPT.format(
