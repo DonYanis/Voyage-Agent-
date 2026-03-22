@@ -458,6 +458,7 @@ else:
                     "budget_breakdown": result.get("budget_breakdown", {}),
                     "weather": result.get("weather", []),
                     "itinerary": result.get("itinerary", []),
+                    "recommendation": result.get("recommendation", {}),
                     "tips": result.get("tips", []),
                     "travel_type": travel_type
                 }

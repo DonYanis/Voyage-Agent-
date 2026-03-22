@@ -153,6 +153,61 @@ def generate_pdf(plan: dict) -> bytes:
         story.append(w_table)
         story.append(Spacer(1, 0.4*cm))
 
+    # Recommandation LLM
+    if plan.get("recommendation"):
+        story.append(Paragraph("🤖 Recommandation de l'agent", section_style))
+
+        rec = plan["recommendation"]
+        global_summary = rec.get("global_summary", "")
+        if global_summary:
+            story.append(Paragraph(global_summary, body_style))
+            story.append(Spacer(1, 0.3*cm))
+
+        rec_f = rec.get("recommended_flight", {})
+        rec_h = rec.get("recommended_hotel", {})
+
+        # Tableau vol + hôtel côte à côte
+        flight_obj = rec_f.get("object", {})
+        hotel_obj  = rec_h.get("object", {})
+
+        rec_data = [
+            ["✈️ Vol recommandé", "🏨 Hôtel recommandé"],
+            [
+                f"{rec_f.get('name', flight_obj.get('airline', '?'))}\n"
+                f"Prix : {rec_f.get('price', flight_obj.get('total_price', '?'))}€\n"
+                f"Escales : {'Direct' if flight_obj.get('stops', 1) == 0 else str(flight_obj.get('stops', '?')) + ' escale(s)'}",
+
+                f"{rec_h.get('name', hotel_obj.get('name', '?'))}\n"
+                f"{rec_h.get('price_per_night', hotel_obj.get('price_per_night', '?'))}€/nuit — "
+                f"Total : {rec_h.get('total_price', hotel_obj.get('total_price', '?'))}€\n"
+                f"Note : {hotel_obj.get('rating', '?')}/10"
+            ],
+            [
+                f"Pourquoi ?\n{rec_f.get('reason', '')}",
+                f"Pourquoi ?\n{rec_h.get('reason', '')}"
+            ]
+        ]
+
+        rec_table = Table(rec_data, colWidths=[8.5*cm, 8.5*cm])
+        rec_table.setStyle(TableStyle([
+            # Header row
+            ("BACKGROUND",  (0, 0), (0, 0), colors.HexColor("#2E86AB")),
+            ("BACKGROUND",  (1, 0), (1, 0), colors.HexColor("#F18F01")),
+            ("TEXTCOLOR",   (0, 0), (-1, 0), colors.white),
+            ("FONTNAME",    (0, 0), (-1, 0), "Helvetica-Bold"),
+            # Data rows
+            ("BACKGROUND",  (0, 1), (0, 1), colors.HexColor("#EAF4FB")),
+            ("BACKGROUND",  (1, 1), (1, 1), colors.HexColor("#FEF9E7")),
+            ("BACKGROUND",  (0, 2), (0, 2), colors.HexColor("#F4F6F8")),
+            ("BACKGROUND",  (1, 2), (1, 2), colors.HexColor("#F4F6F8")),
+            # General
+            ("FONTSIZE",    (0, 0), (-1, -1), 9),
+            ("GRID",        (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ("VALIGN",      (0, 0), (-1, -1), "TOP"),
+            ("PADDING",     (0, 0), (-1, -1), 8),
+        ]))
+        story.append(rec_table)
+        story.append(Spacer(1, 0.4*cm))
     # Itinéraire
     if plan.get("itinerary"):
         story.append(Paragraph("📅 Itinéraire jour par jour", section_style))
