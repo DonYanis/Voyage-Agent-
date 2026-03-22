@@ -1,0 +1,7 @@
+streamlit
+groq
+requests
+python-dotenv
+reportlab
+plotly
+google-search-results
