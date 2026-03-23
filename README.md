@@ -23,12 +23,14 @@ La boucle ReAct est au cœur de l'agent. Pour chaque décision, l'agent :
 Exemple concret : si la météo indique de la pluie le jour 2, l'agent détecte cela dans sa phase Thought et adapte les activités (musées, restaurants couverts) lors de l'Action suivante.
 
 ### 2. Chain of Thought (CoT) — Budget
-Pour la répartition du budget, l'agent décompose explicitement le problème en étapes :
-1. Calculer le budget restant après les vols
-2. Appliquer les ratios selon le profil (économique/équilibré/luxe/aventure)
-3. Calculer les montants par catégorie
-4. Vérifier que la somme = budget restant
-5. Calculer le budget journalier par personne
+- Le LLM reçoit le budget total, le coût des vols, le nombre de jours, le nombre de voyageurs, le profil de voyage et la destination
+- Étape 1 : calcul du budget restant après déduction des vols
+- Étape 2 : évaluation du coût de vie de la destination (bon marché, moyen, cher)
+- Étape 3 : adaptation des ratios du profil selon le contexte de la destination
+- Étape 4 : calcul des montants exacts par catégorie (hébergement, activités, nourriture, transport, imprévus)
+- Étape 5 : vérification que la somme des catégories est égale au budget restant
+- Étape 6 : calcul du budget journalier par personne
+- Le LLM retourne un JSON structuré avec le raisonnement complet et une note explicative sur les ajustements effectués pour la destination
 
 ### 3. Self-Correction — Vérification du plan
 Après avoir généré l'itinéraire, l'agent se critique lui-même :
