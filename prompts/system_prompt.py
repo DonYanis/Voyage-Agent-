@@ -44,23 +44,63 @@ Réponse Finale: [L'itinéraire complet et structuré]
 
 Commence maintenant :"""
 
+COT_BUDGET_PROMPT = """Tu es un expert en planification de voyages et en gestion de budget.
 
-COT_BUDGET_PROMPT = """Répartis ce budget de voyage étape par étape.
+Voici les profils de voyageurs disponibles :
 
-Budget total : {total}€
-Coût des vols : {flights}€
-Jours : {days}
-Voyageurs : {travelers}
-Type de voyage : {travel_type}
+ÉCONOMIQUE : Voyageur avec budget serré. Priorité aux auberges/hostels/hôtels basiques.
+Activités gratuites ou peu chères (temples, marchés, parcs). Street food et restaurants locaux.
+Transport en commun uniquement. Ratios suggérés : hébergement 25%, nourriture 35%,
+activités 20%, transport 15%, imprévus 5%.
+
+ÉQUILIBRÉ : Voyageur standard. Hôtels 3-4 étoiles bien notés. Mix activités payantes
+et gratuites. Restaurants locaux de qualité + quelques restaurants touristiques.
+Transport en commun + taxis occasionnels. Ratios suggérés : hébergement 40%,
+activités 25%, nourriture 20%, transport 10%, imprévus 5%.
+
+LUXE : Voyageur premium. Hôtels 5 étoiles ou boutique hotels. Activités exclusives
+(spa, tours privés, restaurants gastronomiques). Taxis et transferts privés.
+Expériences haut de gamme. Ratios suggérés : hébergement 50%, activités 20%,
+nourriture 20%, transport 5%, imprévus 5%.
+
+AVENTURE : Voyageur actif. Hébergement secondaire (priorité budget activités).
+Activités outdoor intensives (randonnées, plongée, excursions, sports extrêmes).
+Street food. Transport local authentique (tuk-tuk, moto-taxi).
+Ratios suggérés : hébergement 20%, activités 50%, nourriture 20%, transport 5%, imprévus 5%.
+
+---
+
+Maintenant répartis ce budget étape par étape.
+
+Budget total    : {budget}€
+Coût des vols   : {flight_cost}€
+Jours           : {days}
+Voyageurs       : {travelers}
+Profil          : {travel_type}
+Destination     : {destination}
 
 Pense étape par étape :
 Étape 1 : Calcule le budget restant après les vols.
-Étape 2 : Applique la répartition selon le profil ({travel_type}).
-Étape 3 : Calcule les montants par catégorie.
-Étape 4 : Vérifie que la somme = budget restant.
-Étape 5 : Donne le budget journalier par personne.
+Étape 2 : Évalue si {destination} est une destination chère, moyenne ou bon marché.
+Étape 3 : Prends les ratios du profil {travel_type} et ajuste-les selon le coût de vie de {destination}.
+          Par exemple : Bangkok est bon marché → réduire hébergement, augmenter activités.
+          Paris est cher → augmenter hébergement, réduire activités.
+Étape 4 : Calcule les montants exacts par catégorie.
+Étape 5 : Vérifie que la somme de toutes les catégories = budget restant.
+Étape 6 : Calcule le budget journalier par personne.
 
-Répartition :"""
+Retourne UNIQUEMENT ce JSON sans texte avant ou après :
+{{
+  "reasoning": "ton raisonnement complet étape par étape",
+  "restant": 0,
+  "hebergement": 0,
+  "activites": 0,
+  "nourriture": 0,
+  "transport": 0,
+  "imprevus": 0,
+  "daily_per_person": 0,
+  "destination_note": "explication en 1 phrase pourquoi tu as ajusté les ratios pour cette destination"
+}}"""
 
 
 SELF_CORRECTION_PROMPT = """Tu es un agent critique. Analyse ce plan de voyage et identifie les problèmes.

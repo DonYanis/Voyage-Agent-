@@ -294,7 +294,10 @@ else:
                     st.metric("Coût des vols", f"{budget_data['flight_cost']:.0f}€")
                 with col3:
                     st.metric("Restant", f"{budget_data['remaining_after_flights']:.0f}€")
-
+                            # Note destination LLM
+                dest_note = result.get("budget", {}).get("destination_note", "")
+                if dest_note:
+                    st.info(f"💡 {dest_note}")
                 st.markdown("---")
 
                 breakdown = budget_data.get("breakdown", {})

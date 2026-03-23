@@ -210,41 +210,75 @@ class VoyageAgent:
         
         # ÉTAPE 2 : BUDGET (Chain of Thought)
         update("Calcul de la répartition du budget...")
-        self._add_step("thought", "Thought 3 : Je calcule la répartition du budget étape par étape (Chain of Thought).", "🤔")
+        self._add_step("thought",
+            f"Thought 3 : Je répartis le budget pour {params['destination']} "
+            f"selon le profil '{params['travel_type']}' (Chain of Thought).", "🤔")
 
-        budget_data = calculate_budget(
-            total_budget=params["budget"],
+        cot_prompt = COT_BUDGET_PROMPT.format(
+            budget=params["budget"],
             flight_cost=best_flight_cost,
             days=days,
             travelers=params["travelers"],
-            travel_type=params["travel_type"]
+            travel_type=params["travel_type"],
+            destination=params["destination"]
         )
-        b_summary = budget_summary(budget_data)
-        result["budget"] = budget_data
-        # Vérification budget insuffisant
-        if not budget_data.get("success"):
-            self._add_step("thought",
-                f"Thought ALERTE : {budget_data.get('error', 'Budget insuffisant')}. "
-                f"Je vais adapter le plan au budget disponible.", "⚠️")
-            result["budget_warning"] = budget_data.get("error", "Budget insuffisant")
 
-        # Enrichir avec CoT via LLM
-        cot_prompt = COT_BUDGET_PROMPT.format(
-            total=params["budget"],
-            flights=best_flight_cost,
-            days=days,
-            travelers=params["travelers"],
-            travel_type=params["travel_type"]
-        )
         cot_response = self._call_llm([
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": cot_prompt}
-        ], temperature=0.3)
-        result["cot_budget"] = cot_response
+            {"role": "user",   "content": cot_prompt}
+        ], temperature=0.3, max_tokens=1000)
 
-        self._add_step("action", "Action 3 : Répartition du budget par catégorie.", "⚡")
-        self._add_step("observation", f"Observation 3 :\n{b_summary}", "👁️")
+        # Parser le JSON retourné par le LLM
+        cot_data = self._parse_json(cot_response)
 
+        # Fallback Python si le LLM retourne un JSON invalide
+        if not cot_data or not cot_data.get("restant"):
+            budget_data = calculate_budget(
+                total_budget=params["budget"],
+                flight_cost=best_flight_cost,
+                days=days,
+                travelers=params["travelers"],
+                travel_type=params["travel_type"]
+            )
+        else:
+            # Construire budget_data depuis la réponse LLM
+            budget_data = {
+                "success":               True,
+                "total_budget":          params["budget"],
+                "flight_cost":           best_flight_cost,
+                "remaining_after_flights": cot_data.get("restant", 0),
+                "daily_per_person":      cot_data.get("daily_per_person", 0),
+                "travel_type":           params["travel_type"],
+                "days":                  days,
+                "travelers":             params["travelers"],
+                "breakdown": {
+                    "hebergement":     {"total": cot_data.get("hebergement", 0),
+                                        "per_day": round(cot_data.get("hebergement", 0) / max(days, 1), 2),
+                                        "per_person_per_day": round(cot_data.get("hebergement", 0) / max(days, 1) / max(params["travelers"], 1), 2)},
+                    "activites":       {"total": cot_data.get("activites", 0),
+                                        "per_day": round(cot_data.get("activites", 0) / max(days, 1), 2),
+                                        "per_person_per_day": round(cot_data.get("activites", 0) / max(days, 1) / max(params["travelers"], 1), 2)},
+                    "nourriture":      {"total": cot_data.get("nourriture", 0),
+                                        "per_day": round(cot_data.get("nourriture", 0) / max(days, 1), 2),
+                                        "per_person_per_day": round(cot_data.get("nourriture", 0) / max(days, 1) / max(params["travelers"], 1), 2)},
+                    "transport_local": {"total": cot_data.get("transport", 0),
+                                        "per_day": round(cot_data.get("transport", 0) / max(days, 1), 2),
+                                        "per_person_per_day": round(cot_data.get("transport", 0) / max(days, 1) / max(params["travelers"], 1), 2)},
+                    "imprevus":        {"total": cot_data.get("imprevus", 0),
+                                        "per_day": round(cot_data.get("imprevus", 0) / max(days, 1), 2),
+                                        "per_person_per_day": round(cot_data.get("imprevus", 0) / max(days, 1) / max(params["travelers"], 1), 2)},
+                },
+                "destination_note": cot_data.get("destination_note", ""),
+            }
+
+        b_summary = budget_summary(budget_data)
+        result["budget"]     = budget_data
+        result["cot_budget"] = cot_data.get("reasoning", cot_response)
+
+        self._add_step("action", "Action 3 : LLM calcule et répartit le budget selon destination + profil.", "⚡")
+        self._add_step("observation",
+            f"Observation 3 : {budget_data.get('destination_note', '')} | "
+            f"{budget_data.get('daily_per_person', 0):.0f}€/pers/jour", "👁️")
 
         # ÉTAPE 3 : ITINÉRAIRE
         update("Génération de l'itinéraire personnalisé...")
