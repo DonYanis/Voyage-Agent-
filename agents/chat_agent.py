@@ -162,11 +162,9 @@ class ChatAgent:
         for key, value in updates.items():
 
             if key == "recommendation" and isinstance(value, dict):
-                # Merge partiel : ne remplace que les sous-clés fournies
                 for sub_key, sub_val in value.items():
                     updated.setdefault("recommendation", {})[sub_key] = sub_val
 
-                    # Si l'index est fourni, attacher l'objet complet depuis la liste
                     if sub_key == "recommended_hotel" and isinstance(sub_val, dict):
                         idx = sub_val.get("index")
                         hotels = updated.get("hotels", [])
@@ -180,20 +178,33 @@ class ChatAgent:
                             updated["recommendation"]["recommended_flight"]["object"] = flights[idx]
 
             elif key == "itinerary" and isinstance(value, list):
-                # Mise à jour complète ou partielle par numéro de jour
-                if value and isinstance(value[0], dict) and "day" in value[0]:
+                # Si le LLM retourne seulement certains jours → merge par numéro de jour
+                # Si tous les jours sont fournis (changement de dates) → remplacement complet
+                existing_days = {d["day"] for d in updated.get("itinerary", [])}
+                new_days      = {d["day"] for d in value if isinstance(d, dict) and "day" in d}
+                if new_days and new_days.issubset(existing_days) and len(new_days) < len(existing_days):
+                    # Mise à jour partielle
                     day_map = {d["day"]: d for d in updated.get("itinerary", [])}
                     for new_day in value:
                         day_map[new_day["day"]] = new_day
                     updated["itinerary"] = sorted(day_map.values(), key=lambda d: d["day"])
                 else:
-                    updated["itinerary"] = value
+                    # Remplacement complet (nouveau nombre de jours ou itinéraire entier)
+                    updated["itinerary"] = sorted(value, key=lambda d: d.get("day", 0))
 
             elif key == "tips" and isinstance(value, list):
                 updated["tips"] = value
 
             elif key == "budget" and isinstance(value, dict):
                 updated["budget"].update(value)
+
+            elif key in ("depart_date", "return_date", "days", "dates"):
+                # Changement de dates
+                updated[key] = value
+                # Synchroniser aussi dans selected_dates si présent
+                if "selected_dates" in updated:
+                    if key in ("depart_date", "return_date", "days"):
+                        updated["selected_dates"][key] = value
 
             elif key in updated:
                 updated[key] = value
