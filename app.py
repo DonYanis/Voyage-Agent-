@@ -32,6 +32,7 @@ with st.sidebar:
 
     MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
                  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+    MONTH_NUM = {m: i+1 for i, m in enumerate(MONTHS_FR)}
 
     col1, col2 = st.columns(2)
     with col1:
@@ -39,12 +40,21 @@ with st.sidebar:
     with col2:
         period_end = st.selectbox("Mois de fin", MONTHS_FR, index=7)
 
-    trip_days = st.number_input("Durée du voyage (jours)", min_value=1, max_value=90, value=7, step=1)
-
-    # Déterminer l'année automatiquement
-    MONTH_NUM = {m: i+1 for i, m in enumerate(MONTHS_FR)}
+    # Calculer l'année de chaque mois automatiquement
+    today = date.today()
     start_month_num = MONTH_NUM[period_start]
-    travel_year = date.today().year if start_month_num >= date.today().month else date.today().year + 1
+    end_month_num = MONTH_NUM[period_end]
+    start_year = today.year if start_month_num >= today.month else today.year + 1
+    end_year = start_year if end_month_num >= start_month_num else start_year + 1
+    travel_year = start_year
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.caption(f"📅 {period_start} **{start_year}**")
+    with col2:
+        st.caption(f"📅 {period_end} **{end_year}**")
+
+    trip_days = st.number_input("Durée du voyage (jours)", min_value=1, max_value=90, value=7, step=1)
 
     travelers = st.slider("Voyageurs", 1, 8, 2)
 
@@ -129,8 +139,8 @@ else:
     params = {
         "origin": origin,
         "destination": destination,
-        "period_start": period_start,
-        "period_end": period_end,
+        "period_start": f"{period_start} {start_year}",
+        "period_end": f"{period_end} {end_year}",
         "year": travel_year,
         "trip_days": int(trip_days),
         "budget": budget,
