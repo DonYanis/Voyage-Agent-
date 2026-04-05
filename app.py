@@ -34,6 +34,8 @@ if "result" not in st.session_state:
     st.session_state["result"] = None
 if "trip_params" not in st.session_state:
     st.session_state["trip_params"] = {}
+if "chat_history" not in st.session_state:
+    st.session_state["chat_history"] = []
 
 # ── HELPERS ────────────────────────────────────────────────────────────────────
 MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
@@ -45,6 +47,7 @@ def go_home():
     st.session_state["page"] = "form"
     st.session_state["result"] = None
     st.session_state["trip_params"] = {}
+    st.session_state["chat_history"] = []
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -490,3 +493,63 @@ elif st.session_state["page"] == "results":
 
         except Exception as e:
             st.error(f"Erreur PDF : {e}")
+
+    # ── CHAT ──────────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 💬 Modifier le plan avec l'assistant")
+    st.markdown(
+        "<p style='color:#888;font-size:0.9rem;margin-top:-0.5rem;'>"
+        "Demande des changements : changer l'hôtel, modifier une activité, "
+        "ajouter un conseil, changer le vol...</p>",
+        unsafe_allow_html=True
+    )
+
+    # Afficher l'historique du chat
+    for msg in st.session_state["chat_history"]:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Input utilisateur
+    user_input = st.chat_input("Ex: Change l'hôtel pour quelque chose de moins cher, Ajoute une activité le jour 2...")
+
+    if user_input:
+        # Afficher le message utilisateur immédiatement
+        st.session_state["chat_history"].append({"role": "user", "content": user_input})
+
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        # Appel au chat agent
+        with st.chat_message("assistant"):
+            with st.spinner("L'agent réfléchit..."):
+                try:
+                    from agents.chat_agent import ChatAgent
+                    chat_agent = ChatAgent()
+
+                    response = chat_agent.process(
+                        user_message=user_input,
+                        current_result=st.session_state["result"],
+                        chat_history=st.session_state["chat_history"][:-1]
+                    )
+
+                    # Appliquer les mises à jour au résultat
+                    if response.get("updates"):
+                        st.session_state["result"] = chat_agent.apply_updates(
+                            st.session_state["result"],
+                            response["updates"]
+                        )
+                        # Refresh result local var for tabs already rendered above
+                        result = st.session_state["result"]
+
+                    assistant_msg = response.get("message", "Désolé, je n'ai pas pu traiter ta demande.")
+                    st.session_state["chat_history"].append({"role": "assistant", "content": assistant_msg})
+                    st.markdown(assistant_msg)
+
+                    # Si des mises à jour ont été faites, notifier l'utilisateur
+                    if response.get("updates"):
+                        st.rerun()
+
+                except Exception as e:
+                    err_msg = f"Erreur de l'assistant : {e}"
+                    st.session_state["chat_history"].append({"role": "assistant", "content": err_msg})
+                    st.error(err_msg)
