@@ -240,8 +240,8 @@ elif st.session_state["page"] == "results":
         st.info(f"📅 **Pourquoi ces dates ?** {date_info['explanation']}")
 
     # ── TABS ──
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🧠 Raisonnement", "💰 Budget", "📅 Itinéraire", "📄 Export PDF"
+    tab2, tab3, tab4, tab1 = st.tabs([
+        "💰 Budget", "📅 Itinéraire", "📄 Export PDF", "🧠 Raisonnement"
     ])
 
     # TAB 1 : RAISONNEMENT

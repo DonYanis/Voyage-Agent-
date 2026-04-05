@@ -36,8 +36,17 @@ class ChatAgent:
             f"Dates : {result.get('depart_date', '?')} → {result.get('return_date', '?')} "
             f"({result.get('days', '?')} jours)"
         )
+        budget_data = result.get("budget", {})
+        flight_cost = budget_data.get("flight_cost", result.get("flight_cost", 0))
+        remaining   = budget_data.get("remaining_after_flights", 0)
+        daily       = budget_data.get("daily_per_person", 0)
         lines.append(
-            f"Budget : {result.get('budget_total', '?')}€  |  "
+            f"Budget total : {result.get('budget_total', '?')}€  |  "
+            f"Vols : {flight_cost:.0f}€  |  "
+            f"Restant : {remaining:.0f}€  |  "
+            f"Journalier/pers : {daily:.0f}€"
+        )
+        lines.append(
             f"Type : {result.get('travel_type', '?')}  |  "
             f"Voyageurs : {result.get('travelers', '?')}"
         )
@@ -195,8 +204,17 @@ class ChatAgent:
             elif key == "tips" and isinstance(value, list):
                 updated["tips"] = value
 
+            elif key == "budget_total":
+                updated["budget_total"] = value
+                # Sync inside budget dict too
+                if "budget" in updated and isinstance(updated["budget"], dict):
+                    updated["budget"]["total_budget"] = value
+
             elif key == "budget" and isinstance(value, dict):
-                updated["budget"].update(value)
+                updated.setdefault("budget", {}).update(value)
+                # Sync top-level budget_total
+                if "total_budget" in value:
+                    updated["budget_total"] = value["total_budget"]
 
             elif key in ("depart_date", "return_date", "days", "dates"):
                 # Changement de dates

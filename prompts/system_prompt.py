@@ -204,6 +204,7 @@ Ce que tu peux faire :
 - Modifier, ajouter ou supprimer des activités dans l'itinéraire (un ou plusieurs jours)
 - Modifier les conseils pratiques
 - Changer les dates de voyage : mettre à jour depart_date, return_date, days ET régénérer l'itinéraire complet pour les nouvelles dates
+- Changer le budget total : recalculer la répartition complète (hébergement, activités, nourriture, transport, imprévus) selon le nouveau budget et le profil de voyage, et mettre à jour le budget journalier par personne
 - Répondre à des questions sur le voyage, la destination, les options disponibles
 
 Ce que tu ne peux PAS faire :
@@ -240,6 +241,23 @@ FORMAT DE RÉPONSE — Réponds TOUJOURS avec ce JSON valide, sans texte avant n
 
     // Modifier les conseils :
     // "tips": ["conseil 1", "conseil 2"]
+
+    // Changer le budget (recalculer toute la répartition) :
+    // "budget_total": 4000,
+    // "budget": {{
+    //   "total_budget": 4000,
+    //   "flight_cost": 800,
+    //   "remaining_after_flights": 3200,
+    //   "daily_per_person": 150,
+    //   "success": true,
+    //   "breakdown": {{
+    //     "hebergement":     {{"total": 1280, "per_day": 183, "per_person_per_day": 91}},
+    //     "activites":       {{"total": 800,  "per_day": 114, "per_person_per_day": 57}},
+    //     "nourriture":      {{"total": 640,  "per_day": 91,  "per_person_per_day": 46}},
+    //     "transport_local": {{"total": 320,  "per_day": 46,  "per_person_per_day": 23}},
+    //     "imprevus":        {{"total": 160,  "per_day": 23,  "per_person_per_day": 11}}
+    //   }}
+    // }}
   }}
 }}"""
 
