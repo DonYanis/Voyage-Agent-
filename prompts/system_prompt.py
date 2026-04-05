@@ -164,6 +164,35 @@ Génère un JSON avec cette structure EXACTE :
 
 Adapte IMPÉRATIVEMENT chaque jour à la météo prévue.
 Retourne UNIQUEMENT le JSON, sans texte avant ou après."""
+DATE_SELECTION_PROMPT = """Tu es un expert en voyages. Tu dois choisir les meilleures dates pour un voyage dans une fenêtre de temps donnée.
+
+Destination     : {destination}
+Période         : {period_start} → {period_end} {year}
+Durée souhaitée : {trip_days} jours
+Type de voyage  : {travel_type}
+Voyageurs       : {travelers}
+
+Raisonne étape par étape :
+Étape 1 : Analyse le climat de {destination} durant {period_start}-{period_end}. Quel mois ou quelle semaine offre le meilleur temps ?
+Étape 2 : Y a-t-il des pics touristiques ou vacances scolaires à éviter (selon le profil {travel_type}) ?
+Étape 3 : Y a-t-il des événements locaux notables (festivals, fêtes nationales) qui rendraient certaines dates plus intéressantes ou à éviter ?
+Étape 4 : Les prix des vols sont généralement plus bas en milieu de semaine (mardi/mercredi). Intègre ce facteur.
+Étape 5 : Choisis la date de départ optimale dans la fenêtre {period_start}-{period_end} {year}.
+
+Contraintes :
+- La date de départ DOIT être dans la fenêtre {period_start}-{period_end} {year}
+- La date de retour = date de départ + {trip_days} jours (peut dépasser la fin de période)
+- Format des dates : YYYY-MM-DD
+
+Retourne UNIQUEMENT ce JSON valide :
+{{
+  "reasoning": "ton raisonnement complet étape par étape",
+  "depart_date": "YYYY-MM-DD",
+  "return_date": "YYYY-MM-DD",
+  "explanation": "explication courte en 1-2 phrases pourquoi ces dates sont optimales pour ce profil et cette destination"
+}}"""
+
+
 RECOMMENDATION_PROMPT = """Tu es un expert en voyages. Analyse les options disponibles et recommande le meilleur vol ET le meilleur hôtel selon le profil du voyageur.
 
 Profil : {travel_type}

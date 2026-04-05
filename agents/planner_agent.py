@@ -10,7 +10,8 @@ from tools.budget_tool import calculate_budget, budget_summary
 from tools.hotels_tool import search_hotels, hotels_summary
 from prompts.system_prompt import (
     SYSTEM_PROMPT, REACT_PROMPT, COT_BUDGET_PROMPT,
-    SELF_CORRECTION_PROMPT, ITINERARY_PROMPT, RECOMMENDATION_PROMPT
+    SELF_CORRECTION_PROMPT, ITINERARY_PROMPT, RECOMMENDATION_PROMPT,
+    DATE_SELECTION_PROMPT
 )
 
 load_dotenv()
@@ -114,6 +115,47 @@ class VoyageAgent:
 
         return result
     
+    def select_best_dates(self, period_start: str, period_end: str, year: int,
+                          trip_days: int, destination: str, travel_type: str, travelers: int) -> dict:
+        """
+        Utilise le LLM pour choisir les meilleures dates dans une fenêtre de temps.
+        Retourne un dict avec depart_date, return_date (YYYY-MM-DD) et explanation.
+        """
+        prompt = DATE_SELECTION_PROMPT.format(
+            destination=destination,
+            period_start=period_start,
+            period_end=period_end,
+            year=year,
+            trip_days=trip_days,
+            travel_type=travel_type,
+            travelers=travelers
+        )
+
+        response = self._call_llm([
+            {"role": "system", "content": "Tu es un expert en voyages. Réponds UNIQUEMENT en JSON valide."},
+            {"role": "user", "content": prompt}
+        ], temperature=0.3, max_tokens=800)
+
+        result = self._parse_json(response)
+
+        # Fallback si le LLM retourne un JSON invalide ou des dates manquantes
+        if not result.get("depart_date"):
+            from datetime import datetime, timedelta
+            month_map = {
+                "Janvier": 1, "Février": 2, "Mars": 3, "Avril": 4,
+                "Mai": 5, "Juin": 6, "Juillet": 7, "Août": 8,
+                "Septembre": 9, "Octobre": 10, "Novembre": 11, "Décembre": 12
+            }
+            start_m = month_map.get(period_start, 6)
+            depart = datetime(year, start_m, 15)
+            return_d = depart + timedelta(days=trip_days)
+            result["depart_date"] = depart.strftime("%Y-%m-%d")
+            result["return_date"] = return_d.strftime("%Y-%m-%d")
+            result["reasoning"] = "Dates calculées automatiquement (milieu de la période de départ)."
+            result["explanation"] = f"Départ fixé au milieu de {period_start} {year} par défaut."
+
+        return result
+
     def plan(self, params: dict, progress_callback=None) -> dict:
         """
         Pipeline principal de planification.
@@ -130,12 +172,52 @@ class VoyageAgent:
             if progress_callback:
                 progress_callback(msg)
 
+        # ÉTAPE 0 : SÉLECTION DES DATES (ReAct — nouveau)
+        update("Sélection des meilleures dates...")
+        self._add_step("thought",
+            f"Thought 0 : L'utilisateur souhaite voyager à {params['destination']} durant "
+            f"{params['period_start']}–{params['period_end']} {params['year']} "
+            f"pour {params['trip_days']} jours. Je dois choisir les dates optimales "
+            f"en tenant compte de la météo, des prix et du profil '{params['travel_type']}'.", "🤔")
+
+        date_selection = self.select_best_dates(
+            period_start=params["period_start"],
+            period_end=params["period_end"],
+            year=params["year"],
+            trip_days=params["trip_days"],
+            destination=params["destination"],
+            travel_type=params["travel_type"],
+            travelers=params["travelers"]
+        )
+
+        depart_date = date_selection["depart_date"]
+        return_date = date_selection["return_date"]
+        days = (self._parse_date(return_date) - self._parse_date(depart_date)).days
+        date_explanation = date_selection.get("explanation", "")
+        date_reasoning = date_selection.get("reasoning", "")
+
+        # Mettre à jour params avec les dates réelles
+        params["depart_date"] = depart_date
+        params["return_date"] = return_date
+
+        self._add_step("action", f"Action 0 : Analyse de la fenêtre {params['period_start']}–{params['period_end']} {params['year']} pour {params['trip_days']} jours.", "⚡")
+        self._add_step("observation",
+            f"Observation 0 : Dates optimales sélectionnées → {depart_date} au {return_date} ({days} jours). "
+            f"{date_explanation}", "👁️")
+
+        result["selected_dates"] = {
+            "depart_date": depart_date,
+            "return_date": return_date,
+            "days": days,
+            "explanation": date_explanation,
+            "reasoning": date_reasoning
+        }
+
         # ÉTAPE 1 : COLLECTE DES DONNÉES (Actions)
         self._add_step("thought", "Thought 1 : Je dois collecter les données météo et de vols pour planifier le voyage.", "🤔")
         update("Recherche des données météo...")
 
         # Action 1 : Météo
-        days = (self._parse_date(params["return_date"]) - self._parse_date(params["depart_date"])).days
         weather_data = get_weather(params["destination"], days)
         w_summary = weather_summary(weather_data)
         result["weather"] = weather_data.get("days", [])
@@ -337,6 +419,8 @@ class VoyageAgent:
         # Méta-données pour le PDF
         result["destination"] = params["destination"]
         result["origin"] = params["origin"]
+        result["depart_date"] = depart_date
+        result["return_date"] = return_date
         result["dates"] = dates_str
         result["travelers"] = params["travelers"]
         result["budget_total"] = params["budget"]

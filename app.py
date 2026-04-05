@@ -1,7 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
-from datetime import datetime, date, timedelta
+from datetime import date
 import json
 import os
 from dotenv import load_dotenv
@@ -30,19 +30,21 @@ with st.sidebar:
     origin = st.text_input("Ville de départ", value="Paris", placeholder="Ex: Paris")
     destination = st.text_input("Destination", value="Tokyo", placeholder="Ex: Tokyo, Bali...")
 
+    MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                 "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+
     col1, col2 = st.columns(2)
     with col1:
-        depart_date = st.date_input(
-            "Départ",
-            value=date.today() + timedelta(days=30),
-            min_value=date.today()
-        )
+        period_start = st.selectbox("Mois de début", MONTHS_FR, index=5)
     with col2:
-        return_date = st.date_input(
-            "Retour",
-            value=date.today() + timedelta(days=37),
-            min_value=date.today() + timedelta(days=1)
-        )
+        period_end = st.selectbox("Mois de fin", MONTHS_FR, index=7)
+
+    trip_days = st.number_input("Durée du voyage (jours)", min_value=1, max_value=90, value=7, step=1)
+
+    # Déterminer l'année automatiquement
+    MONTH_NUM = {m: i+1 for i, m in enumerate(MONTHS_FR)}
+    start_month_num = MONTH_NUM[period_start]
+    travel_year = date.today().year if start_month_num >= date.today().month else date.today().year + 1
 
     travelers = st.slider("Voyageurs", 1, 8, 2)
 
@@ -113,17 +115,6 @@ if not plan_btn:
     """)
 
 else:
-    # Validation dates
-    if return_date <= depart_date:
-        st.error("❌ La date de retour doit être après la date de départ.")
-        st.stop()
-
-    days = (return_date - depart_date).days
-
-    if days < 1:
-        st.error("❌ Le voyage doit durer au moins 1 jour.")
-        st.stop()
-
     if not os.getenv("GROQ_API_KEY"):
         st.error("❌ Clé Groq manquante. Entre ta clé API dans la sidebar.")
         st.stop()
@@ -138,8 +129,10 @@ else:
     params = {
         "origin": origin,
         "destination": destination,
-        "depart_date": depart_date.strftime("%Y-%m-%d"),
-        "return_date": return_date.strftime("%Y-%m-%d"),
+        "period_start": period_start,
+        "period_end": period_end,
+        "year": travel_year,
+        "trip_days": int(trip_days),
         "budget": budget,
         "travelers": travelers,
         "travel_type": travel_type,
@@ -155,12 +148,13 @@ else:
 
     def update_progress(msg):
         steps_map = {
-            "Recherche des données météo...": 20,
-            "Recherche des vols disponibles...": 40,
-            "Recherche des hôtels disponibles...": 50,
-            "Le LLM analyse et recommande le meilleur vol et hôtel...": 55,
-            "Calcul de la répartition du budget...": 60,
-            "Génération de l'itinéraire personnalisé...": 80,
+            "Sélection des meilleures dates...": 10,
+            "Recherche des données météo...": 25,
+            "Recherche des vols disponibles...": 42,
+            "Recherche des hôtels disponibles...": 52,
+            "Le LLM analyse et recommande le meilleur vol et hôtel...": 57,
+            "Calcul de la répartition du budget...": 65,
+            "Génération de l'itinéraire personnalisé...": 82,
             "Vérification et correction du plan...": 95,
         }
         pct = steps_map.get(msg, 50)
@@ -177,7 +171,19 @@ else:
         progress_bar.progress(100)
         status_text.markdown("**Plan généré avec succès !**")
 
-        st.success(f"Ton voyage à **{destination}** est planifié ! ({days} jours)")
+        depart_date = result["depart_date"]
+        return_date = result["return_date"]
+        days = result["days"]
+
+        st.success(
+            f"Ton voyage à **{destination}** est planifié ! "
+            f"({days} jours · {depart_date} → {return_date})"
+        )
+
+        # Afficher l'explication du choix de dates
+        date_info = result.get("selected_dates", {})
+        if date_info.get("explanation"):
+            st.info(f"📅 **Pourquoi ces dates ?** {date_info['explanation']}")
 
         # ONGLETS DE RÉSULTATS
         #tab1,  tab3, tab4, tab2, tab5 = st.tabs(["🧠 Raisonnement",  "💰 Budget", "📅 Itinéraire","🌤 Météo", "📄 Export PDF"])
@@ -211,6 +217,15 @@ else:
                                unsafe_allow_html=True)
 
             
+            if result.get("selected_dates", {}).get("reasoning"):
+                st.markdown("---")
+                st.markdown("### Sélection des dates (ReAct — Étape 0)")
+                st.markdown("*Voici comment l'agent a choisi les dates optimales :*")
+                st.markdown(
+                    f'<div class="thought-box">{result["selected_dates"]["reasoning"]}</div>',
+                    unsafe_allow_html=True
+                )
+
             if result.get("cot_budget"):
                 st.markdown("---")
                 st.markdown("### Raisonnement budget (Chain of Thought)")
@@ -465,7 +480,7 @@ else:
                 plan_for_pdf = {
                     "destination": destination,
                     "origin": origin,
-                    "dates": f"{depart_date} au {return_date}",
+                    "dates": f"{depart_date} au {return_date}",  # from result
                     "travelers": travelers,
                     "budget": budget,
                     "flight_cost": result.get("flight_cost", 0),
@@ -482,7 +497,7 @@ else:
                 st.download_button(
                     label="📥 Télécharger le PDF",
                     data=pdf_bytes,
-                    file_name=f"itineraire_{destination.lower().replace(' ', '_')}_{depart_date}.pdf",
+                    file_name=f"itineraire_{destination.lower().replace(' ', '_')}_{depart_date[:7]}.pdf",
                     mime="application/pdf",
                     use_container_width=True
                 )
