@@ -1,8 +1,6 @@
 import streamlit as st
 import plotly.graph_objects as go
-import plotly.express as px
 from datetime import date
-import json
 import os
 from dotenv import load_dotenv
 
@@ -12,513 +10,483 @@ load_dotenv()
 st.set_page_config(
     page_title="Agent Planificateur de Voyage",
     page_icon="✈️",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-# CSS :
+# CSS
 with open("css/styles.css", "r") as f:
     css = f.read()
 st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
+# Hide sidebar entirely
+st.markdown("""
+<style>
+[data-testid="stSidebar"] { display: none; }
+[data-testid="collapsedControl"] { display: none; }
+</style>
+""", unsafe_allow_html=True)
 
-# FORMULAIRE
-with st.sidebar:
-    st.markdown("## Planifier mon voyage")
-    st.markdown("---")
+# ── SESSION STATE ──────────────────────────────────────────────────────────────
+if "page" not in st.session_state:
+    st.session_state["page"] = "form"
+if "result" not in st.session_state:
+    st.session_state["result"] = None
+if "trip_params" not in st.session_state:
+    st.session_state["trip_params"] = {}
 
-    origin = st.text_input("Ville de départ", value="Paris", placeholder="Ex: Paris")
-    destination = st.text_input("Destination", value="Tokyo", placeholder="Ex: Tokyo, Bali...")
+# ── HELPERS ────────────────────────────────────────────────────────────────────
+MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+             "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+MONTH_NUM = {m: i + 1 for i, m in enumerate(MONTHS_FR)}
 
-    MONTHS_FR = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-                 "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
-    MONTH_NUM = {m: i+1 for i, m in enumerate(MONTHS_FR)}
 
-    col1, col2 = st.columns(2)
-    with col1:
-        period_start = st.selectbox("Mois de début", MONTHS_FR, index=5)
-    with col2:
-        period_end = st.selectbox("Mois de fin", MONTHS_FR, index=7)
+def go_home():
+    st.session_state["page"] = "form"
+    st.session_state["result"] = None
+    st.session_state["trip_params"] = {}
 
-    # Calculer l'année de chaque mois automatiquement
-    today = date.today()
-    start_month_num = MONTH_NUM[period_start]
-    end_month_num = MONTH_NUM[period_end]
-    start_year = today.year if start_month_num >= today.month else today.year + 1
-    end_year = start_year if end_month_num >= start_month_num else start_year + 1
-    travel_year = start_year
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.caption(f"📅 {period_start} **{start_year}**")
-    with col2:
-        st.caption(f"📅 {period_end} **{end_year}**")
+# ══════════════════════════════════════════════════════════════════════════════
+#  PAGE FORMULAIRE
+# ══════════════════════════════════════════════════════════════════════════════
+if st.session_state["page"] == "form":
 
-    trip_days = st.number_input("Durée du voyage (jours)", min_value=1, max_value=90, value=7, step=1)
-
-    travelers = st.slider("Voyageurs", 1, 8, 2)
-
-    budget = st.number_input(
-        "Budget total (€)",
-        min_value=200,
-        max_value=50000,
-        value=3000,
-        step=100,
-        help="Budget total pour tous les voyageurs incluant les vols"
+    # Header
+    st.markdown('<div class="main-title">✈️ Agent Planificateur de Voyage</div>', unsafe_allow_html=True)
+    st.markdown(
+        "<p style='text-align:center;color:#888;font-size:1rem;'>"
+        "Décris ton voyage, l'IA s'occupe du reste — dates, vols, hôtels, budget et itinéraire."
+        "<br><small>Powered by LLaMA 3 · ReAct · Chain of Thought · Self-Correction</small>"
+        "</p>",
+        unsafe_allow_html=True
     )
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    travel_type = st.selectbox(
-        "Type de voyage",
-        ["équilibré", "économique", "luxe", "aventure"],
-        index=0
-    )
+    # ── FORM ──
+    with st.form("voyage_form"):
 
-    st.markdown("---")
-    st.markdown("**Clés API**")
-    groq_key = st.text_input("Groq API Key obligatoire", type="password",
-                              value=os.getenv("GROQ_API_KEY", ""),
-                              help="Gratuit sur console.groq.com")
-    weather_key = st.text_input("OpenWeather Key (optionnel)", type="password",
-                                 value=os.getenv("OPENWEATHER_API_KEY", ""),
-                                 help="Gratuit sur openweathermap.org")
-    serpapi_key = st.text_input("SerpApi Key (optionnel)", type="password",
-                                 value=os.getenv("SERPAPI_API_KEY", ""),
-                                 help="Gratuit sur serpapi.com — vols Google Flights reels")
+        col1, col2 = st.columns(2)
+        with col1:
+            origin = st.text_input("Ville de départ", value="Paris", placeholder="Ex: Paris")
+        with col2:
+            destination = st.text_input("Destination", value="Tokyo", placeholder="Ex: Tokyo, Bali...")
 
-    if groq_key:
-        os.environ["GROQ_API_KEY"] = groq_key
-    if weather_key:
-        os.environ["OPENWEATHER_API_KEY"] = weather_key
-    if serpapi_key:
-        os.environ["SERPAPI_API_KEY"] = serpapi_key
+        st.markdown("**Période souhaitée**")
+        col1, col2 = st.columns(2)
+        with col1:
+            period_start = st.selectbox("Mois de début", MONTHS_FR, index=5)
+        with col2:
+            period_end = st.selectbox("Mois de fin", MONTHS_FR, index=7)
 
-    st.markdown("---")
-    plan_btn = st.button("Planifier mon voyage !", use_container_width=True)
+        # Compute years and show them
+        today = date.today()
+        start_month_num = MONTH_NUM[period_start]
+        end_month_num = MONTH_NUM[period_end]
+        start_year = today.year if start_month_num >= today.month else today.year + 1
+        end_year = start_year if end_month_num >= start_month_num else start_year + 1
 
+        col1, col2 = st.columns(2)
+        with col1:
+            st.caption(f"📅 {period_start} **{start_year}**")
+        with col2:
+            st.caption(f"📅 {period_end} **{end_year}**")
 
-# PAGE PRINCIPALE
-st.markdown('<div class="main-title">Agent Planificateur de Voyage</div>', unsafe_allow_html=True)
-st.markdown(
-    "<p style='text-align:center;color:#666;'>Powered by LLaMA 3 (Groq) · ReAct + Chain of Thought + Self-Correction</p>",
-    unsafe_allow_html=True
-)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            trip_days = st.number_input("Durée (jours)", min_value=1, max_value=90, value=7, step=1)
+        with col2:
+            travelers = st.slider("Voyageurs", 1, 8, 2)
+        with col3:
+            budget = st.number_input(
+                "Budget total (€)",
+                min_value=200, max_value=50000, value=3000, step=100,
+                help="Budget total pour tous les voyageurs, vols inclus"
+            )
 
-if not plan_btn:
-    # Page d'accueil
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.info("### ReAct\nL'agent raisonne étape par étape avant chaque action")
-    with col2:
-        st.info("### Chain of Thought\nDécomposition intelligente du budget en étapes")
-    with col3:
-        st.info("### Self-Correction\nL'agent vérifie et corrige son propre plan")
-
-    st.markdown("---")
-    st.markdown("""
-    ### Comment ça marche ?
-    1. **Remplis le formulaire** à gauche avec ta destination et ton budget
-    2. **L'agent collecte** la météo et les vols en temps réel
-    3. **Il raisonne** (ReAct) pour adapter le programme à la météo
-    4. **Il répartit** ton budget intelligemment (Chain of Thought)
-    5. **Il vérifie** la cohérence du plan (Self-Correction)
-    6. **Tu télécharges** l'itinéraire complet en PDF !
-    """)
-
-else:
-    if not os.getenv("GROQ_API_KEY"):
-        st.error("❌ Clé Groq manquante. Entre ta clé API dans la sidebar.")
-        st.stop()
-
-    # get iata des villes avec llm expl : charles de gaule : CDG
-    from agents.planner_agent import VoyageAgent
-    agent = VoyageAgent()
-    origin_iata = agent.get_iata_from_llm(origin)
-    dest_iata = agent.get_iata_from_llm(destination)
-
-    # LANCEMENT DE L'AGENT
-    params = {
-        "origin": origin,
-        "destination": destination,
-        "period_start": f"{period_start} {start_year}",
-        "period_end": f"{period_end} {end_year}",
-        "year": travel_year,
-        "trip_days": int(trip_days),
-        "budget": budget,
-        "travelers": travelers,
-        "travel_type": travel_type,
-        "origin_iata": origin_iata,
-        "dest_iata": dest_iata
-    }
-
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    steps_container = st.empty()
-
-    reasoning_display = []
-
-    def update_progress(msg):
-        steps_map = {
-            "Sélection des meilleures dates...": 10,
-            "Recherche des données météo...": 25,
-            "Recherche des vols disponibles...": 42,
-            "Recherche des hôtels disponibles...": 52,
-            "Le LLM analyse et recommande le meilleur vol et hôtel...": 57,
-            "Calcul de la répartition du budget...": 65,
-            "Génération de l'itinéraire personnalisé...": 82,
-            "Vérification et correction du plan...": 95,
-        }
-        pct = steps_map.get(msg, 50)
-        progress_bar.progress(pct)
-        status_text.markdown(f"**{msg}**")
-
-    try:
-        from agents.planner_agent import VoyageAgent
-        agent = VoyageAgent()
-
-        with st.spinner("L'agent planifie ton voyage..."):
-            result = agent.plan(params, progress_callback=update_progress)
-
-        progress_bar.progress(100)
-        status_text.markdown("**Plan généré avec succès !**")
-
-        depart_date = result["depart_date"]
-        return_date = result["return_date"]
-        days = result["days"]
-
-        st.success(
-            f"Ton voyage à **{destination}** est planifié ! "
-            f"({days} jours · {depart_date} → {return_date})"
+        travel_type = st.selectbox(
+            "Type de voyage",
+            ["équilibré", "économique", "luxe", "aventure"],
+            index=0
         )
 
-        # Afficher l'explication du choix de dates
-        date_info = result.get("selected_dates", {})
-        if date_info.get("explanation"):
-            st.info(f"📅 **Pourquoi ces dates ?** {date_info['explanation']}")
+        with st.expander("🔑 Clés API"):
+            groq_key    = st.text_input("Groq API Key (obligatoire)", type="password",
+                                         value=os.getenv("GROQ_API_KEY", ""),
+                                         help="Gratuit sur console.groq.com")
+            weather_key = st.text_input("OpenWeather Key (optionnel)", type="password",
+                                         value=os.getenv("OPENWEATHER_API_KEY", ""),
+                                         help="Gratuit sur openweathermap.org")
+            serpapi_key = st.text_input("SerpApi Key (optionnel)", type="password",
+                                         value=os.getenv("SERPAPI_API_KEY", ""),
+                                         help="Gratuit sur serpapi.com")
 
-        # ONGLETS DE RÉSULTATS
-        #tab1,  tab3, tab4, tab2, tab5 = st.tabs(["🧠 Raisonnement",  "💰 Budget", "📅 Itinéraire","🌤 Météo", "📄 Export PDF"])
-        tab1,  tab3, tab4,  tab5 = st.tabs([
-            "🧠 Raisonnement",  "💰 Budget", "📅 Itinéraire", "📄 Export PDF"
-        ])
+        submitted = st.form_submit_button("🚀 Planifier mon voyage !", use_container_width=True)
+
+    # ── ON SUBMIT ──
+    if submitted:
+        if groq_key:
+            os.environ["GROQ_API_KEY"] = groq_key
+        if weather_key:
+            os.environ["OPENWEATHER_API_KEY"] = weather_key
+        if serpapi_key:
+            os.environ["SERPAPI_API_KEY"] = serpapi_key
+
+        if not os.getenv("GROQ_API_KEY"):
+            st.error("❌ Clé Groq manquante. Renseigne-la dans la section Clés API.")
+            st.stop()
+
+        # Progress UI (shown while form is still visible, then we rerun to results)
+        progress_bar = st.progress(0)
+        status_text  = st.empty()
+
+        def update_progress(msg):
+            steps_map = {
+                "Sélection des meilleures dates...": 10,
+                "Recherche des données météo...": 25,
+                "Recherche des vols disponibles...": 42,
+                "Recherche des hôtels disponibles...": 52,
+                "Le LLM analyse et recommande le meilleur vol et hôtel...": 57,
+                "Calcul de la répartition du budget...": 65,
+                "Génération de l'itinéraire personnalisé...": 82,
+                "Vérification et correction du plan...": 95,
+            }
+            progress_bar.progress(steps_map.get(msg, 50))
+            status_text.markdown(f"**{msg}**")
+
+        try:
+            from agents.planner_agent import VoyageAgent
+            agent = VoyageAgent()
+
+            update_progress("Sélection des meilleures dates...")
+            origin_iata = agent.get_iata_from_llm(origin)
+            dest_iata   = agent.get_iata_from_llm(destination)
+
+            params = {
+                "origin":       origin,
+                "destination":  destination,
+                "period_start": f"{period_start} {start_year}",
+                "period_end":   f"{period_end} {end_year}",
+                "year":         start_year,
+                "trip_days":    int(trip_days),
+                "budget":       budget,
+                "travelers":    travelers,
+                "travel_type":  travel_type,
+                "origin_iata":  origin_iata,
+                "dest_iata":    dest_iata,
+            }
+
+            with st.spinner("L'agent planifie ton voyage..."):
+                result = agent.plan(params, progress_callback=update_progress)
+
+            progress_bar.progress(100)
+            status_text.markdown("**Plan généré !**")
+
+            st.session_state["result"]      = result
+            st.session_state["trip_params"] = params
+            st.session_state["page"]        = "results"
+            st.rerun()
+
+        except ValueError as e:
+            st.error(f"❌ {e}")
+        except Exception as e:
+            st.error(f"❌ Erreur : {e}")
+            st.exception(e)
 
 
-        # TAB 1 : RAISONNEMENT 
-        with tab1:
-            st.markdown("### 🧠 Raisonnement de l'agent (ReAct)")
-            st.markdown("*Voici comment l'agent a raisonné pour construire ton voyage :*")
+# ══════════════════════════════════════════════════════════════════════════════
+#  PAGE RÉSULTATS
+# ══════════════════════════════════════════════════════════════════════════════
+elif st.session_state["page"] == "results":
+
+    result      = st.session_state["result"]
+    params      = st.session_state["trip_params"]
+    origin      = params.get("origin", "")
+    destination = params.get("destination", "")
+    travelers   = params.get("travelers", 1)
+    budget      = params.get("budget", 0)
+    travel_type = params.get("travel_type", "")
+
+    depart_date = result["depart_date"]
+    return_date = result["return_date"]
+    days        = result["days"]
+
+    # ── HOME BUTTON ──
+    if st.button("⬅️ Nouveau voyage", type="secondary"):
+        go_home()
+        st.rerun()
+
+    st.markdown("---")
+
+    # ── TRIP HEADER ──
+    st.markdown(
+        f'<div class="main-title" style="font-size:1.6rem;">'
+        f'✈️ {origin} → {destination}</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        f"<p style='text-align:center;color:#666;'>"
+        f"{days} jours · {depart_date} → {return_date} · "
+        f"{travelers} voyageur(s) · {budget}€ · {travel_type}"
+        f"</p>",
+        unsafe_allow_html=True
+    )
+
+    date_info = result.get("selected_dates", {})
+    if date_info.get("explanation"):
+        st.info(f"📅 **Pourquoi ces dates ?** {date_info['explanation']}")
+
+    # ── TABS ──
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🧠 Raisonnement", "💰 Budget", "📅 Itinéraire", "📄 Export PDF"
+    ])
+
+    # TAB 1 : RAISONNEMENT
+    with tab1:
+        st.markdown("### 🧠 Raisonnement de l'agent (ReAct)")
+        st.markdown("*Voici comment l'agent a raisonné pour construire ton voyage :*")
+        st.markdown("---")
+
+        for step in result.get("reasoning_steps", []):
+            stype   = step["type"]
+            content = step["content"]
+            if stype == "thought":
+                st.markdown(f'<div class="thought-box"><b>Thought</b> — {content}</div>',
+                            unsafe_allow_html=True)
+            elif stype == "action":
+                st.markdown(f'<div class="action-box"><b>Action</b> — {content}</div>',
+                            unsafe_allow_html=True)
+            elif stype == "observation":
+                st.markdown(f'<div class="obs-box"><b>Observation</b> — {content}</div>',
+                            unsafe_allow_html=True)
+            elif stype == "final":
+                st.markdown(f'<div class="final-box">{content}</div>',
+                            unsafe_allow_html=True)
+
+        if date_info.get("reasoning"):
+            st.markdown("---")
+            st.markdown("### Sélection des dates (ReAct — Étape 0)")
+            st.markdown("*Voici comment l'agent a choisi les dates optimales :*")
+            st.markdown(f'<div class="thought-box">{date_info["reasoning"]}</div>',
+                        unsafe_allow_html=True)
+
+        if result.get("cot_budget"):
+            st.markdown("---")
+            st.markdown("### Raisonnement budget (Chain of Thought)")
+            st.markdown("*Voici comment l'agent a raisonné pour répartir le budget :*")
+            st.markdown(f'<div class="thought-box">{result["cot_budget"]}</div>',
+                        unsafe_allow_html=True)
+
+        if result.get("correction"):
+            st.markdown("---")
+            st.markdown("### Auto-correction (Self-Correction)")
+            st.info(result["correction"])
+
+    # TAB 2 : BUDGET
+    with tab2:
+        st.markdown("### 💰 Répartition du budget")
+
+        budget_data = result.get("budget", {})
+        if budget_data.get("success"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Budget total", f"{budget_data['total_budget']}€")
+            with col2:
+                st.metric("Coût des vols", f"{budget_data['flight_cost']:.0f}€")
+            with col3:
+                st.metric("Restant", f"{budget_data['remaining_after_flights']:.0f}€")
+
+            dest_note = budget_data.get("destination_note", "")
+            if dest_note:
+                st.info(f"💡 {dest_note}")
             st.markdown("---")
 
-            for step in result.get("reasoning_steps", []):
-                stype = step["type"]
-                content = step["content"]
-                icon = step["icon"]
+            breakdown = budget_data.get("breakdown", {})
+            if breakdown:
+                labels     = ["Vols"] + [k.replace("_", " ").capitalize() for k in breakdown]
+                values     = [budget_data["flight_cost"]] + [v["total"] for v in breakdown.values()]
+                colors_pie = ["#2E86AB", "#F18F01", "#28B463", "#E74C3C", "#8E44AD", "#F39C12"]
 
-                if stype == "thought":
-                    st.markdown(f'<div class="thought-box"> <b>Thought</b> — {content}</div>',
-                               unsafe_allow_html=True)
-                elif stype == "action":
-                    st.markdown(f'<div class="action-box"> <b>Action</b> — {content}</div>',
-                               unsafe_allow_html=True)
-                elif stype == "observation":
-                    st.markdown(f'<div class="obs-box"> <b>Observation</b> — {content}</div>',
-                               unsafe_allow_html=True)
-                elif stype == "final":
-                    st.markdown(f'<div class="final-box"> {content}</div>',
-                               unsafe_allow_html=True)
+                fig_pie = go.Figure(data=[go.Pie(
+                    labels=labels, values=values, hole=0.4,
+                    marker=dict(colors=colors_pie)
+                )])
+                fig_pie.update_layout(height=350, margin=dict(l=0, r=0, t=20, b=0))
+                st.plotly_chart(fig_pie, use_container_width=True)
 
-            
-            if result.get("selected_dates", {}).get("reasoning"):
-                st.markdown("---")
-                st.markdown("### Sélection des dates (ReAct — Étape 0)")
-                st.markdown("*Voici comment l'agent a choisi les dates optimales :*")
-                st.markdown(
-                    f'<div class="thought-box">{result["selected_dates"]["reasoning"]}</div>',
-                    unsafe_allow_html=True
-                )
-
-            if result.get("cot_budget"):
-                st.markdown("---")
-                st.markdown("### Raisonnement budget (Chain of Thought)")
-                st.markdown("*Voici comment l'agent a raisonné pour répartir le budget :*")
-                st.markdown(
-                    f'<div class="thought-box">{result["cot_budget"]}</div>',
-                    unsafe_allow_html=True
-                )
-
-            if result.get("correction"):
-                st.markdown("---")
-                st.markdown("###  Auto-correction (Self-Correction)")
-                st.markdown(f"*L'agent a vérifié son plan :*")
-                st.info(result["correction"])
-      
-#        # TAB 2 : MÉTÉO
-#        with tab2:
-#            st.markdown(f"### 🌤 Météo à {destination}")
-#
-#            weather_days = result.get("weather", [])
-#            if weather_days:
-#                # Graphique températures
-#                dates_w = [d["date"] for d in weather_days]
-#                temps_min = [d["temp_min"] for d in weather_days]
-#                temps_max = [d["temp_max"] for d in weather_days]
-#
-#                fig = go.Figure()
-#                fig.add_trace(go.Scatter(
-#                    x=dates_w, y=temps_max, name="Temp. max",
-#                    line=dict(color="#F18F01", width=2),
-#                    fill=None
-#                ))
-#                fig.add_trace(go.Scatter(
-#                    x=dates_w, y=temps_min, name="Temp. min",
-#                    line=dict(color="#2E86AB", width=2),
-#                    fill="tonexty", fillcolor="rgba(46,134,171,0.1)"
-#                ))
-#                fig.update_layout(
-#                    title="Températures prévues",
-#                    xaxis_title="Date",
-#                    yaxis_title="Température (°C)",
-#                    height=300,
-#                    margin=dict(l=0, r=0, t=40, b=0)
-#                )
-#                st.plotly_chart(fig, use_container_width=True)
-#
-#                # Cartes météo par jour
-#                cols = st.columns(min(len(weather_days), 4))
-#                for i, day in enumerate(weather_days[:8]):
-#                    with cols[i % 4]:
-#                        rain_emoji = "🌧️" if day.get("rain", 0) > 0 else ""
-#                        desc = day["description"].capitalize()
-#                        if "soleil" in desc.lower() or "dégagé" in desc.lower() or "clair" in desc.lower():
-#                            emoji = "☀️"
-#                        elif "pluie" in desc.lower() or "rain" in desc.lower():
-#                            emoji = "🌧️"
-#                        elif "nuage" in desc.lower() or "cloud" in desc.lower():
-#                            emoji = "⛅"
-#                        elif "orage" in desc.lower():
-#                            emoji = "⛈️"
-#                        else:
-#                            emoji = "🌤️"
-#
-#                        st.metric(
-#                            label=f"{emoji} {day['date']}",
-#                            value=f"{day['temp_max']}°C",
-#                            delta=f"min {day['temp_min']}°C"
-#                        )
-#                        st.caption(f"{desc} | 💧{day['humidity']}%")
-#        
-#        # TAB 3 : BUDGET
-        with tab3:
-            st.markdown("### 💰 Répartition du budget")
-
-            budget_data = result.get("budget", {})
-            if budget_data.get("success"):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Budget total", f"{budget_data['total_budget']}€")
-                with col2:
-                    st.metric("Coût des vols", f"{budget_data['flight_cost']:.0f}€")
-                with col3:
-                    st.metric("Restant", f"{budget_data['remaining_after_flights']:.0f}€")
-                            # Note destination LLM
-                dest_note = result.get("budget", {}).get("destination_note", "")
-                if dest_note:
-                    st.info(f"💡 {dest_note}")
-                st.markdown("---")
-
-                breakdown = budget_data.get("breakdown", {})
-                if breakdown:
-                    # Graphique camembert
-                    labels = [k.replace("_", " ").capitalize() for k in breakdown.keys()]
-                    labels = ["Vols"] + labels
-                    values = [budget_data["flight_cost"]] + [v["total"] for v in breakdown.values()]
-                    colors_pie = ["#2E86AB", "#F18F01", "#28B463", "#E74C3C", "#8E44AD", "#F39C12"]
-
-                    fig_pie = go.Figure(data=[go.Pie(
-                        labels=labels,
-                        values=values,
-                        hole=0.4,
-                        marker=dict(colors=colors_pie)
-                    )])
-                    fig_pie.update_layout(height=350, margin=dict(l=0, r=0, t=20, b=0))
-                    st.plotly_chart(fig_pie, use_container_width=True)
-
-                    # Tableau
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        st.markdown("**Détail par catégorie :**")
-                        for cat, vals in breakdown.items():
-                            st.markdown(
-                                f"- **{cat.replace('_', ' ').capitalize()}** : "
-                                f"{vals['total']:.0f}€ total / "
-                                f"{vals['per_person_per_day']:.0f}€ pers/jour"
-                            )
-                    with col_b:
-                        daily = budget_data.get("daily_per_person", 0)
-                        st.metric("💸 Budget journalier / personne", f"{daily:.0f}€")
-
-            # Vols disponibles
-            st.markdown("---")
-            # ── RECOMMANDATION LLM ──
-            recommendation = result.get("recommendation", {})
-            if recommendation:
-                rec_f = recommendation.get("recommended_flight", {})
-                rec_h = recommendation.get("recommended_hotel", {})
-                summary = recommendation.get("global_summary", "")
-
-                st.markdown("### Recommandation de l'agent")
-
-                if summary:
-                    st.info(f" {summary}")
-
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.markdown("#### Vol recommandé")
-                    if rec_f:
-                        obj = rec_f.get("object", {})
-                        st.success(
-                            f"**{rec_f.get('name', obj.get('airline', '?'))}**\n\n"
-                            f"Prix total : **{rec_f.get('price', obj.get('total_price', '?'))}€**"
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.markdown("**Détail par catégorie :**")
+                    for cat, vals in breakdown.items():
+                        st.markdown(
+                            f"- **{cat.replace('_', ' ').capitalize()}** : "
+                            f"{vals['total']:.0f}€ total / {vals['per_person_per_day']:.0f}€ pers/jour"
                         )
-                        st.markdown(f"**Pourquoi ?** {rec_f.get('reason', '')}")
+                with col_b:
+                    st.metric("💸 Budget journalier / personne",
+                              f"{budget_data.get('daily_per_person', 0):.0f}€")
 
-                with col2:
-                    st.markdown("#### Hôtel recommandé")
-                    if rec_h:
-                        obj = rec_h.get("object", {})
-                        st.success(
-                            f"**{rec_h.get('name', obj.get('name', '?'))}**\n\n"
-                            f"{rec_h.get('price_per_night', obj.get('price_per_night', '?'))}€/nuit — "
-                            f"Total : **{rec_h.get('total_price', obj.get('total_price', '?'))}€**"
-                        )
-                        st.markdown(f"**Pourquoi ?** {rec_h.get('reason', '')}")
+        st.markdown("---")
 
-                st.markdown("---")
-            st.markdown("###  Vols disponibles")
-            flights = result.get("flights", [])
-            if flights:
-                for i, f in enumerate(flights[:3]):
-                    stops = " Direct" if f["stops"] == 0 else f" {f['stops']} escale(s)"
-                    with st.expander(f"**{f['airline']}** — {f['total_price']:.0f}€ total — {stops}"):
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.write(f"**Vol** : {f['flight_number']}")
-                            st.write(f"**Départ** : {f['departure'][:16]}")
-                        with col2:
-                            st.write(f"**Arrivée** : {f['arrival'][:16]}")
-                            st.write(f"**Durée** : {f['duration']}")
-                        with col3:
-                            st.write(f"**Prix/pers.** : {f['price_per_person']:.0f}€")
-                            st.write(f"**Total** : {f['total_price']:.0f}€")
-            # Hôtels disponibles
-            st.markdown("---")
-            st.markdown("### Hôtels disponibles")
-            hotels = result.get("hotels", [])
-            if hotels:
-                for i, h in enumerate(hotels[:4]):
-                    stars_str = "★" * int(h.get("stars", 0)) if h.get("stars") else ""
-                    rating = h.get("rating", 0)
-                    with st.expander(f"**{h['name']}** {stars_str} — {h['price_per_night']:.0f}€/nuit — Note : {rating}/10"):
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.write(f"**Prix/nuit** : {h['price_per_night']:.0f}€")
-                            st.write(f"**Total {h['days']} nuits** : {h['total_price']:.0f}€")
-                        with col2:
-                            st.write(f"**Note** : {rating}/10")
-                            st.write(f"**Avis** : {h.get('reviews', 0)} avis")
-                        with col3:
-                            amenities = h.get("amenities", [])
-                            if amenities:
-                                st.write("**Équipements** : " + ", ".join(amenities[:3]))
-                        if h.get("description"):
-                            st.caption(h["description"])
-                        if h.get("link"):
-                            st.markdown(f"[Voir sur Google Hotels]({h['link']})")
-        # TAB 4 : ITINÉRAIRE
-        with tab4:
-            st.markdown(f"### 📅 Itinéraire {origin} → {destination}")
+        # Recommandation LLM
+        recommendation = result.get("recommendation", {})
+        if recommendation:
+            rec_f   = recommendation.get("recommended_flight", {})
+            rec_h   = recommendation.get("recommended_hotel", {})
+            summary = recommendation.get("global_summary", "")
 
-            # Score de voyage
-            score_data = result.get("travel_score", {})
-            if score_data:
-                score = score_data.get("score", 7)
-                reasons = score_data.get("reasons", [])
-                col1, col2 = st.columns([1, 3])
-                with col1:
-                    st.markdown(f'<div class="score-badge">⭐ {score}/10</div>', unsafe_allow_html=True)
-                    st.caption("Score de voyage")
-                with col2:
-                    st.markdown("**Pourquoi ce score :**")
-                    for r in reasons:
-                        st.markdown(f"• {r}")
+            st.markdown("### Recommandation de l'agent")
+            if summary:
+                st.info(summary)
 
-            st.markdown("---")
-
-            # Jours
-            itinerary = result.get("itinerary", [])
-            if itinerary:
-                for day_plan in itinerary:
-                    weather_note = day_plan.get("weather_note", "")
-                    st.markdown(
-                        f'<div class="day-card">'
-                        f'<h4> Jour {day_plan.get("day", "?")} — {day_plan.get("date", "")} : '
-                        f'{day_plan.get("title", "")}</h4>'
-                        + (f'<p style="color:#666;font-size:0.85rem;">🌤 {weather_note}</p>' if weather_note else "")
-                        + "</div>",
-                        unsafe_allow_html=True
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("#### Vol recommandé")
+                if rec_f:
+                    obj = rec_f.get("object", {})
+                    st.success(
+                        f"**{rec_f.get('name', obj.get('airline', '?'))}**\n\n"
+                        f"Prix total : **{rec_f.get('price', obj.get('total_price', '?'))}€**"
                     )
-                    activities = day_plan.get("activities", [])
-                    for activity in activities:
-                        st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;• {activity}")
-                    st.markdown("")
+                    st.markdown(f"**Pourquoi ?** {rec_f.get('reason', '')}")
+            with col2:
+                st.markdown("#### Hôtel recommandé")
+                if rec_h:
+                    obj = rec_h.get("object", {})
+                    st.success(
+                        f"**{rec_h.get('name', obj.get('name', '?'))}**\n\n"
+                        f"{rec_h.get('price_per_night', obj.get('price_per_night', '?'))}€/nuit — "
+                        f"Total : **{rec_h.get('total_price', obj.get('total_price', '?'))}€**"
+                    )
+                    st.markdown(f"**Pourquoi ?** {rec_h.get('reason', '')}")
 
-            # Conseils
-            tips = result.get("tips", [])
-            if tips:
-                st.markdown("### 💡 Conseils pratiques")
-                for tip in tips:
-                    st.info(f"💡 {tip}")
+            st.markdown("---")
 
-        # TAB 5 : EXPORT PDF
-        with tab5:
-            st.markdown("### 📄 Télécharger l'itinéraire")
-            st.markdown("Télécharge ton itinéraire complet en PDF pour l'avoir hors-ligne.")
+        # Vols disponibles
+        st.markdown("### Vols disponibles")
+        flights = result.get("flights", [])
+        if flights:
+            for f in flights[:3]:
+                stops = "Direct" if f["stops"] == 0 else f"{f['stops']} escale(s)"
+                with st.expander(f"**{f['airline']}** — {f['total_price']:.0f}€ total — {stops}"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write(f"**Vol** : {f['flight_number']}")
+                        st.write(f"**Départ** : {f['departure'][:16]}")
+                    with col2:
+                        st.write(f"**Arrivée** : {f['arrival'][:16]}")
+                        st.write(f"**Durée** : {f['duration']}")
+                    with col3:
+                        st.write(f"**Prix/pers.** : {f['price_per_person']:.0f}€")
+                        st.write(f"**Total** : {f['total_price']:.0f}€")
+        else:
+            st.caption("Aucun vol trouvé (clé SerpApi non configurée).")
 
-            try:
-                from tools.pdf_tool import generate_pdf
+        st.markdown("---")
 
-                plan_for_pdf = {
-                    "destination": destination,
-                    "origin": origin,
-                    "dates": f"{depart_date} au {return_date}",  # from result
-                    "travelers": travelers,
-                    "budget": budget,
-                    "flight_cost": result.get("flight_cost", 0),
-                    "budget_breakdown": result.get("budget_breakdown", {}),
-                    "weather": result.get("weather", []),
-                    "itinerary": result.get("itinerary", []),
-                    "recommendation": result.get("recommendation", {}),
-                    "tips": result.get("tips", []),
-                    "travel_type": travel_type
-                }
+        # Hôtels disponibles
+        st.markdown("### Hôtels disponibles")
+        hotels = result.get("hotels", [])
+        if hotels:
+            for h in hotels[:4]:
+                stars_str = "★" * int(h.get("stars", 0)) if h.get("stars") else ""
+                rating    = h.get("rating", 0)
+                with st.expander(
+                    f"**{h['name']}** {stars_str} — {h['price_per_night']:.0f}€/nuit — Note : {rating}/10"
+                ):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.write(f"**Prix/nuit** : {h['price_per_night']:.0f}€")
+                        st.write(f"**Total {h['days']} nuits** : {h['total_price']:.0f}€")
+                    with col2:
+                        st.write(f"**Note** : {rating}/10")
+                        st.write(f"**Avis** : {h.get('reviews', 0)} avis")
+                    with col3:
+                        amenities = h.get("amenities", [])
+                        if amenities:
+                            st.write("**Équipements** : " + ", ".join(amenities[:3]))
+                    if h.get("description"):
+                        st.caption(h["description"])
+                    if h.get("link"):
+                        st.markdown(f"[Voir sur Google Hotels]({h['link']})")
+        else:
+            st.caption("Aucun hôtel trouvé (clé SerpApi non configurée).")
 
-                pdf_bytes = generate_pdf(plan_for_pdf)
+    # TAB 3 : ITINÉRAIRE
+    with tab3:
+        st.markdown(f"### 📅 Itinéraire {origin} → {destination}")
 
-                st.download_button(
-                    label="📥 Télécharger le PDF",
-                    data=pdf_bytes,
-                    file_name=f"itineraire_{destination.lower().replace(' ', '_')}_{depart_date[:7]}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
+        score_data = result.get("travel_score", {})
+        if score_data:
+            score   = score_data.get("score", 7)
+            reasons = score_data.get("reasons", [])
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                st.markdown(f'<div class="score-badge">⭐ {score}/10</div>',
+                            unsafe_allow_html=True)
+                st.caption("Score de voyage")
+            with col2:
+                st.markdown("**Pourquoi ce score :**")
+                for r in reasons:
+                    st.markdown(f"• {r}")
+
+        st.markdown("---")
+
+        itinerary = result.get("itinerary", [])
+        if itinerary:
+            for day_plan in itinerary:
+                weather_note = day_plan.get("weather_note", "")
+                st.markdown(
+                    f'<div class="day-card">'
+                    f'<h4>Jour {day_plan.get("day", "?")} — {day_plan.get("date", "")} : '
+                    f'{day_plan.get("title", "")}</h4>'
+                    + (f'<p style="color:#666;font-size:0.85rem;">🌤 {weather_note}</p>'
+                       if weather_note else "")
+                    + "</div>",
+                    unsafe_allow_html=True
                 )
-                st.success("PDF prêt au téléchargement !")
+                for activity in day_plan.get("activities", []):
+                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;• {activity}")
+                st.markdown("")
 
-            except Exception as e:
-                st.error(f"Erreur PDF : {e}")
+        tips = result.get("tips", [])
+        if tips:
+            st.markdown("### 💡 Conseils pratiques")
+            for tip in tips:
+                st.info(f"💡 {tip}")
 
-    except ValueError as e:
-        st.error(f"❌ {e}")
-        st.info("💡 Entre ta clé API Groq dans la sidebar (console.groq.com)")
-    except Exception as e:
-        st.error(f"❌ Erreur : {e}")
-        st.exception(e)
+    # TAB 4 : EXPORT PDF
+    with tab4:
+        st.markdown("### 📄 Télécharger l'itinéraire")
+        st.markdown("Télécharge ton itinéraire complet en PDF pour l'avoir hors-ligne.")
+
+        try:
+            from tools.pdf_tool import generate_pdf
+
+            plan_for_pdf = {
+                "destination":      destination,
+                "origin":           origin,
+                "dates":            f"{depart_date} au {return_date}",
+                "travelers":        travelers,
+                "budget":           budget,
+                "flight_cost":      result.get("flight_cost", 0),
+                "budget_breakdown": result.get("budget_breakdown", {}),
+                "weather":          result.get("weather", []),
+                "itinerary":        result.get("itinerary", []),
+                "recommendation":   result.get("recommendation", {}),
+                "tips":             result.get("tips", []),
+                "travel_type":      travel_type,
+            }
+
+            pdf_bytes = generate_pdf(plan_for_pdf)
+            st.download_button(
+                label="📥 Télécharger le PDF",
+                data=pdf_bytes,
+                file_name=f"itineraire_{destination.lower().replace(' ', '_')}_{depart_date[:7]}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+            st.success("PDF prêt au téléchargement !")
+
+        except Exception as e:
+            st.error(f"Erreur PDF : {e}")
